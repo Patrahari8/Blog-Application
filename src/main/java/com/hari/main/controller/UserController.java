@@ -18,6 +18,11 @@ public class UserController {
 	@Autowired
 	UserService userService;
 
+	@GetMapping("/")
+	public String redirectToPosts() {
+		return "redirect:/post"; 
+	}
+
 	@GetMapping("/signup")
 	public String signUp(Model model) {
 		model.addAttribute("user", new User());

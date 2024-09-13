@@ -78,7 +78,6 @@ public class PostController {
 		return "post";
 	}
 
-	@PreAuthorize("hasAnyRole('AUTHOR', 'ADMIN')")
 	@GetMapping("/create")
 	public String createPage(Model model) {
 		Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -95,7 +94,6 @@ public class PostController {
 		return "create";
 	}
 
-	@PreAuthorize("hasAnyRole('AUTHOR', 'ADMIN')")
 	@PostMapping("/creatingprocess")
 	public String addingBlog(@ModelAttribute Post post, @RequestParam("tagsString") String tags,
 	        @RequestParam("authorName") String authorName, Model model) {
@@ -127,7 +125,6 @@ public class PostController {
 	}
 
 
-	@PreAuthorize("hasAnyRole('AUTHOR', 'ADMIN')")
 	@GetMapping("/{id}/edit")
 	public String editPage(@PathVariable int id, Model model) {
 		Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -157,7 +154,6 @@ public class PostController {
 		return "redirect:/post";
 	}
 
-	@PreAuthorize("hasAnyRole('AUTHOR', 'ADMIN')")
 	@PutMapping("/{id}/update")
 	public String updatePost(@RequestParam("authorName") String authorName, @PathVariable int id,
 			@ModelAttribute Post post, @RequestParam("updateTags") String updateTags) {
@@ -185,7 +181,6 @@ public class PostController {
 		return "redirect:/post";
 	}
 
-	@PreAuthorize("hasAnyRole('AUTHOR', 'ADMIN')")
 	@GetMapping("/{id}/delete")
 	public String deletePost(@PathVariable int id) {
 		Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
