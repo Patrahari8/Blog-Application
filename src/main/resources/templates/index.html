@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+	xmlns:sec="http://www.thymeleaf.org/thymeleaf-extras-springsecurity5">
+
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Blog Home</title>
+<link rel="stylesheet" th:href="@{/css/styles.css}">
+</head>
+<body>
+	<header>
+		<nav>
+			<h1>
+				<a class="homeButton" th:href="@{/post}">My Blog Application</a>
+			</h1>
+
+
+			<div th:if="${isAuthenticated}">
+				<a class="createButton" th:href="@{/post/create}">Create Blog</a> <b>|</b>
+				<a type="submit" class="createButton" th:href="@{/logout}">Logout</a>
+			</div>
+
+			<div th:if="${isAuthenticated == false}">
+				<a class="createButton" href="/login">Login</a> <b>|</b> <a
+					class="createButton" href="/signup">SignUp</a>
+			</div>
+
+	
+
+		</nav>
+	</header>
+
+	<form class="search-form" th:action="@{/post/search}" method="get">
+		<input type="text" name="query" placeholder="Search posts, tags..."
+			required>
+		<button type="submit">Search</button>
+	</form>
+
+	<main>
+		<!-- Sorting Form -->
+		
+		<form class="sort-form" th:action="@{/post/sortByDate}" method="get">
+			<label for="sortOrder"><h2>Sort by Date:</h2></label> <select
+				id="sortOrder" name="sortOrder" onchange="this.form.submit()">
+				<option disabled selected>Sort</option>
+				<option value="asc" th:selected="${sortOrder == 'asc'}">Oldest
+					First</option>
+				<option value="desc" th:selected="${sortOrder == 'desc'}">Newest
+					First</option>
+			</select>
+		</form>
+
+		<!-- Filter Form -->
+		<form class="filter" th:action="@{/post/filterBy}" method="get">
+			<div>
+				<h2>Author:</h2>
+				<div th:each="author : ${allAuthors}">
+					<input type="checkbox" th:id="${author.id}"
+						th:value="${author.author.name}" th:name="author"
+						th:checked="${selectedAuthors != null and selectedAuthors.contains(author.author.name)}" />
+					<label th:for="${author.id}" th:text="${author.author.name}"></label>
+				</div>
+			</div>
+
+
+
+
+			<label for="publishedDate"><h2>Published Date:</h2></label> <input
+				name="selectedDate" type="date" th:value="@{params.publishedDate}" />
+			<h2>Tags:</h2>
+			<div th:each="tag : ${allTags}">
+				<input type="checkbox" th:id="${tag.id}" th:value="${tag.name}"
+					th:name="tagId"
+					th:checked="${selectedTags != null and selectedTags.contains(tag.name)}" />
+				<label th:for="${tag.id}" th:text="${tag.name}"></label>
+			</div>
+
+
+			<br />
+			<button type="submit">Filter</button>
+		</form>
+
+		<!-- Posts Container -->
+		<div class="container">
+			<div class="post-list">
+				<p
+					th:if="${(allPost == null or allPost.isEmpty()) and (filteredPosts == null or filteredPosts.isEmpty())}">
+					No data available.</p>
+
+				<article
+					th:each="post : ${allPost != null}? ${allPost} : ${filteredPosts} "
+					class="post">
+					<h2>
+						<a th:href="@{/post/{id}(id=${post.id})}" class="title"
+							th:text="${post.title}"></a>
+					</h2>
+					<p>
+						<span class="post-meta" th:text="${post.author.name}"></span> <b>|</b>
+						<span class="post-meta" th:text="${post.createdAt}"></span>
+					</p>
+					<p th:text="${post.excerpt}"></p>
+					<div class="post-meta">
+						<span>Tags: <span th:each="tag : ${post.tags}"> <a
+								th:text="${tag.name}"></a></span></span>
+					</div>
+				</article>
+			</div>
+		</div>
+
+		<!-- Pagination -->
+		<nav class="pagination">
+			<a
+				th:href="@{/post/sortByDate(page=${currentPage - 1}, sortOrder=${sortOrder} )}"
+				th:if="${currentPage > 0}">Previous</a> <span>Page <span
+				th:text="${currentPage + 1}"></span> of <span
+				th:text="${totalPages == 0} ? '1':${totalPages}"></span></span> <a
+				th:href="@{/post/sortByDate(page=${currentPage + 1}, sortOrder=${sortOrder} )}"
+				th:if="${currentPage + 1 < totalPages}">Next</a>
+		</nav>
+	</main>
+</body>
+</html>

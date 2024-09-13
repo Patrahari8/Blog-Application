@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8" />
+    <title>Edit Comment</title>
+    <link rel="stylesheet" th:href="@{/css/postStyles.css}">
+</head>
+<body>
+    <header>
+        <h1>Edit Comment</h1>
+    </header>
+    <main>
+        <section class="comment-form">
+            <h2>Edit Your Comment</h2>
+            <form th:action="@{/comment/{id}/update(id=${commentEditForm.id})}"
+                th:object="${commentEditForm}" th:method="put">
+                
+                <input type="hidden" name="postId" th:value="${postId}" />
+                
+                <!-- Name field -->
+                <div class="form-group">
+                    <label for="name">Name:</label>
+                    <input type="text" id="name"
+                           th:field="*{name}" 
+                           th:disabled="${userRole != 'ROLE_ADMIN'}" />
+                </div>
+
+                <!-- Email field -->
+                <div class="form-group">
+                    <label for="email">Email:</label>
+                    <input type="email" id="email"
+                           th:field="*{email}" 
+                           th:disabled="${userRole != 'ROLE_ADMIN'}" />
+                </div>
+
+                <!-- Comment field -->
+                <div class="form-group">
+                    <label for="comment">Comment:</label>
+                    <textarea name="comment" id="comment" th:field="*{comment}"
+                              rows="5" required></textarea>
+                </div>
+
+                <button type="submit">Submit Comment</button>
+            </form>
+        </section>
+    </main>
+</body>
+</html>

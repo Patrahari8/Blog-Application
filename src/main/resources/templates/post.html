@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Blog Post</title>
+<link rel="stylesheet" th:href="@{/css/postStyles.css}">
+</head>
+<body>
+	<header>
+		<h1 th:text="${post.title}"></h1>
+		<p>
+			<span class="post-meta" th:text="${post.author.name}"></span> - <span
+				class="post-meta" th:text="${post.createdAt}"></span>
+		</p>
+	
+
+		<a th:href="@{/post/{id}/edit(id=${post.id})}"
+			class="update-blog-button">Edit</a> <b>|</b> <a
+			th:href="@{/post/{id}/delete(id=${post.id})}"
+			class="delete-blog-button">Delete</a> <b>|</b> <a class="homeButton"
+			th:href="@{/post}">HOME</a>
+	</header>
+	<main>
+		<article class="post-content">
+			<p th:text="${post.content}">Post content goes here...</p>
+		</article>
+
+		<section class="comments">
+			<h2>Comments</h2>
+			<div th:if="${post.comments.size() == 0}">
+				<p>No comments yet. Be the first to comment!</p>
+			</div>
+			<ul th:each="comment : ${post.comments}">
+				<li class="comment"><a class="edit-comment"
+					th:href="@{/comment/{pid}/edit/{cid}(cid=${comment.id}, pid=${post.id})}">Edit</a>
+					<b>|</b> <a class="delete-button"
+					th:href="@{/comment/{pid}/delete/{cid}(cid=${comment.id}, pid=${post.id})}">Delete</a>
+
+					<div class="comment-meta">
+						<span th:text="${comment.name}"></span><br> <span
+							th:text="${comment.email}"></span> - <span
+							th:text="${comment.created_at}">Comment Date</span>:
+					</div>
+					<p class="comment-text" th:text="${comment.comment}">Comment
+						text goes here...</p></li>
+			</ul>
+		</section>
+
+		<section class="comment-form">
+			<h2>Leave a Comment</h2>
+			<form th:action="@{/comment/{id}(id=${post.id})}" th:method="post">
+				<input type="hidden" id="postId" name="postId" th:value="${post.id}" />
+
+				<!-- Name field -->
+				<div>
+					<label for="name">Name:</label> <input type="hidden" id="userName"
+						name="userName" th:value="${userName}"> <input type="text"
+						id="name" name="userName"
+						th:value="${userName != null ? userName : ''}"
+						th:disabled="${userName != null and (userRole != 'ROLE_ADMIN')}"
+						th:required="${userName == null}" />
+				</div>
+
+
+				<!-- Email field -->
+				<div>
+					<label for="email">Email:</label> <input type="hidden"
+						id="userEmail" name="userEmail" th:value="${userEmail}"> <input
+						type="email" id="email" name="userEmail"
+						th:value="${userEmail != null ? userEmail : ''}"
+						th:disabled="${userEmail != null and (userRole != 'ROLE_ADMIN')}"
+						th:required="${userEmail == null}" />
+				</div>
+
+
+
+				<!-- Comment field -->
+				<div class="form-group">
+					<label for="comment">Comment:</label>
+					<textarea id="comment" name="newComment" rows="5" required></textarea>
+				</div>
+
+				<button type="submit">Submit Comment</button>
+			</form>
+		</section>
+
+	</main>
+</body>
+</html>
