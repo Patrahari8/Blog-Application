@@ -2,21 +2,21 @@ package com.hari.main.service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.ui.Model;
 
 import com.hari.main.dao.PostRepository;
-import com.hari.main.dao.UserRepository;
 import com.hari.main.model.Post;
 import com.hari.main.model.Tag;
 import com.hari.main.model.User;
@@ -37,40 +37,14 @@ public class PostService {
 		post.setPublishedAt(LocalDateTime.now());
 		post.setUpdatedAt(LocalDate.now());
 		post.setAuthor(author);
-
 		post.setPublished(true);
-
-		String content = post.getContent();
-		if (content.length() > 25) {
-			post.setExcerpt(content.substring(0, 25) + "...");
-		} else {
-			post.setExcerpt(content);
-		}
-		System.out.println(tags);
-		Set<Tag> postTagList = new HashSet<>();
-		String[] tagArray = tags.split(",");
-		for (String tagName : tagArray) {
-			tagName = tagName.trim();
-			Tag tag = tagService.fetchTagsByName(tagName);
-			if (tag == null) {
-				Tag newTag = new Tag();
-				newTag.setName(tagName);
-				newTag.setCreated_at(LocalDate.now());
-				newTag.setUpdated_at(LocalDate.now());
-				tagService.saveTag(newTag);
-				postTagList.add(newTag);
-			} else {
-				postTagList.add(tag);
-			}
-		}
-
-		post.setTags(postTagList);
-
+		
+		String content = post.getContent();	
+		String contentExcerpt = content.length() > 25 ? content.substring(0, content.lastIndexOf(' ', 25)) + "..." : content;
+		post.setExcerpt(contentExcerpt);
+		System.out.println("this is the tags "+tags);
+		post.setTags(processTags(tags));
 		postRepository.save(post);
-	}
-
-	public List<Post> fatchAllPosts() {
-		return postRepository.findAll();
 	}
 
 	public Set<Post> fetchAllPostsForDistinctDates() {
@@ -115,25 +89,7 @@ public class PostService {
 		existingPost.setContent(post.getContent());
 		existingPost.setUpdatedAt(LocalDate.now());
 
-		String[] tagStrings = tags.split(",");
-		Set<Tag> tempSet = new HashSet<>();
-
-		for (String tagName : tagStrings) {
-			Tag tag = tagService.fetchTagsByName(tagName);
-
-			if (tag == null) {
-				Tag insertTag = new Tag();
-				insertTag.setName(tagName);
-				insertTag.setCreated_at(LocalDate.now());
-				insertTag.setUpdated_at(LocalDate.now());
-				tempSet.add(insertTag);
-				tagService.saveTag(insertTag);
-			} else {
-				tag.setUpdated_at(LocalDate.now());
-				tempSet.add(tag);
-			}
-		}
-		existingPost.setTags(tempSet);
+		existingPost.setTags(processTags(tags));
 
 		if (authorName != null && !authorName.isEmpty()) {
 			User author = userService.fetchByName(authorName);
@@ -151,18 +107,10 @@ public class PostService {
 		postRepository.delete(post);
 	}
 
-	public List<Post> searchPosts(String query) {
-		Set<Post> searchedDataSet = new HashSet<>();
-		searchedDataSet.addAll(postRepository.findByTitleContainingIgnoreCase(query));
-		searchedDataSet.addAll(postRepository.findByExcerptContainingIgnoreCase(query));
-		searchedDataSet.addAll(postRepository.findByContentContainingIgnoreCase(query));
-		searchedDataSet.addAll(postRepository.findByTagsNameContainingIgnoreCase(query));
-		searchedDataSet.addAll(postRepository.findByAuthorNameContainingIgnoreCase(query));
-		return new ArrayList<>(searchedDataSet);
-	}
-
-	public List<Post> filterPostsByTags(List<String> selectedTags) {
-		return postRepository.findByTagsNameIn(selectedTags);
+	public Page<Post> searchPosts(String query, Pageable pageable) {
+		return postRepository
+				.findByTitleContainingIgnoreCaseOrContentContainingIgnoreCaseOrExcerptContainingIgnoreCaseOrAuthorNameContainingIgnoreCaseOrTagsNameContainingIgnoreCase(
+						query, query, query, query, query, pageable);
 	}
 
 	public Set<Tag> fatchAllTagPosts() {
@@ -175,20 +123,8 @@ public class PostService {
 		return tags;
 	}
 
-	public List<Post> getPostsSortedByDateAsc() {
-		return postRepository.findAllByOrderByPublishedAtAsc();
-	}
-
-	public List<Post> getPostsSortedByDateDesc() {
-		return postRepository.findAllByOrderByPublishedAtDesc();
-	}
-
-	public Page<Post> getPaginatedPosts(int page, int size) {
-		return postRepository.findAll(PageRequest.of(page, size));
-	}
-
-	public Page<Post> getPaginatedPosts(PageRequest pageRequest) {
-		return postRepository.findAll(pageRequest);
+	public Page<Post> getPaginatedPosts(Pageable pageable) {
+		return postRepository.findAll(pageable);
 	}
 
 	public String stringOfTags(Post post) {
@@ -200,37 +136,72 @@ public class PostService {
 
 	}
 
-	public List<Post> filter(List<String> tagId, String selectedDate, List<String> author, int page, int size) {
-		List<Post> filteredPosts = new ArrayList<>();
-
-		if (tagId != null && !tagId.isEmpty()) {
-			filteredPosts = filterPostsByTags(tagId);
-		} else {
-			filteredPosts = fatchAllPosts();
-		}
-
+	public Page<Post> filter(List<String> tagId, String selectedDate, List<String> author, String sortOrder,
+			Pageable pageable) {
+	
+		LocalDate publishedDate = null;
 		if (selectedDate != null && !selectedDate.trim().isEmpty()) {
-			filteredPosts = filterPostsByDateInList(filteredPosts, selectedDate);
+			publishedDate = LocalDate.parse(selectedDate);
+			System.out.println("dvadvdv "+ publishedDate);
 		}
 
-		if (author != null && !author.isEmpty()) {
-			filteredPosts = filterPostsByAuthorInList(filteredPosts, author);
+		if (tagId != null && !tagId.isEmpty() && publishedDate != null && author != null && !author.isEmpty()) {
+			return postRepository.findByTagsNameInAndCreatedAtAndAuthorNameIn(tagId, publishedDate, author, pageable);
+		} else if (tagId != null && !tagId.isEmpty()) {
+			return postRepository.findByTagsNameIn(tagId, pageable);
+		} else if (publishedDate != null) {
+			return postRepository.findByCreatedAt(publishedDate, pageable);
+		} else if (author != null && !author.isEmpty()) {
+			return postRepository.findByAuthorNameIn(author, pageable);
+		} else {
+			return postRepository.findAll(pageable);
 		}
-
-		return filteredPosts;
-
 	}
+	
+    public boolean isAdmin(User user) {
+        return user != null && user.getRole().equalsIgnoreCase("ROLE_ADMIN");
+    }
+    
+    public void addCommonAttributes(Model model, Pageable pageable) {
+        model.addAttribute("allTags", fatchAllTagPosts());
+        model.addAttribute("allPostForDate", fetchAllPostsForDistinctDates());
+        model.addAttribute("allAuthors", fetchAllPostsForDistinctAuthor());
+        model.addAttribute("currentPage", pageable.getPageNumber());
+    }
 
-	public List<Post> filterPostsByDateInList(List<Post> posts, String selectedDate) {
-		LocalDate date = LocalDate.parse(selectedDate);
+    public User getAuthenticatedUser() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.getPrincipal() instanceof UserDetails) {
+            UserDetails userDetails = (UserDetails) authentication.getPrincipal();
+            return userService.fetchByEmail(userDetails.getUsername());
+        }
+        return null;
+    }
+    
+    public boolean isAuthenticated() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication != null && authentication.isAuthenticated()
+               && !(authentication.getPrincipal() instanceof String);
+    }
+    
+    private Set<Tag> processTags(String tags) {
+        Set<Tag> postTagList = new HashSet<>();
+        String[] tagArray = tags.split(",");
+        for (String tagName : tagArray) {
+            tagName = tagName.trim();
+            Tag tag = tagService.fetchTagsByName(tagName);
+            if (tag == null) {  
+                tag = new Tag();
+                tag.setName(tagName);
+				tag.setCreated_at(LocalDate.now());
+				tag.setUpdated_at(LocalDate.now());
+                tagService.saveTag(tag);
+            }
+            postTagList.add(tag);
+        }
+        return postTagList;
+    }
 
-		return posts.stream().filter(post -> post.getPublishedAt().toLocalDate().equals(date))
-				.collect(Collectors.toList());
-	}
 
-	public List<Post> filterPostsByAuthorInList(List<Post> posts, List<String> authors) {
-		return posts.stream().filter(post -> post.getAuthor() != null && authors.contains(post.getAuthor().getName()))
-				.collect(Collectors.toList());
-	}
 
 }

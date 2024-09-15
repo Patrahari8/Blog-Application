@@ -17,6 +17,8 @@ public class UserService {
 	private BCryptPasswordEncoder passwordEncoder;
 
 	public void saveTheUser(User user) {
+		user.setRole("ROLE_AUTHOR");
+		user.setEnabled(true);
 		user.setPassword(passwordEncoder.encode(user.getPassword()));
 		userRepository.save(user);
 	}
@@ -27,7 +29,9 @@ public class UserService {
 	}
 
 	public User fetchByName(String authorName) {
-		User user = userRepository.findByName(authorName);
+		
+		String[] splitName = authorName.split(",");	
+		User user = userRepository.findByName(splitName.length == 2 ? splitName[1] : splitName[0]);
 		return user;
 	}
 }

@@ -1,23 +1,16 @@
 package com.hari.main.controller;
 
 import java.util.List;
+import java.util.Optional;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.ModelAttribute;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.*;
 
 import com.hari.main.model.Post;
 import com.hari.main.model.User;
@@ -36,246 +29,173 @@ public class PostController {
 
 	@GetMapping
 	public String blogPage(Model model, @RequestParam(defaultValue = "0") int page,
-			@RequestParam(defaultValue = "6") int size) {
+			@RequestParam(defaultValue = "6") int size, @RequestParam(defaultValue = "publishedAt") String sortField,
+			@RequestParam(defaultValue = "desc") String sortDirection) {
 
-		Page<Post> paginatedPosts = postService.getPaginatedPosts(page, size);
-		model.addAttribute("currentPage", page);
+		Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.fromString(sortDirection), sortField));
+
+		Page<Post> paginatedPosts = postService.getPaginatedPosts(pageable);
 		model.addAttribute("totalPages", paginatedPosts.getTotalPages());
 		model.addAttribute("allPost", paginatedPosts.getContent());
-		model.addAttribute("allTags", postService.fatchAllTagPosts());
-		model.addAttribute("allPostForDate", postService.fetchAllPostsForDistinctDates());
-		model.addAttribute("allAuthors", postService.fetchAllPostsForDistinctAuthor());
+		postService.addCommonAttributes(model, pageable);
 
-		Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-		boolean isAuthenticated = authentication != null && authentication.isAuthenticated()
-				&& !(authentication.getPrincipal() instanceof String);
-
-		model.addAttribute("isAuthenticated", isAuthenticated);
+		model.addAttribute("isAuthenticated", postService.isAuthenticated());
 
 		return "index";
 	}
 
 	@GetMapping("/{id}")
 	public String postPage(@PathVariable int id, Model model) {
-		Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-
-		if (authentication != null && authentication.isAuthenticated()
-				&& authentication.getPrincipal() instanceof UserDetails) {
-			UserDetails userDetails = (UserDetails) authentication.getPrincipal();
-			String username = userDetails.getUsername();
-			User user = userService.fetchByEmail(username);
-
-			model.addAttribute("userName", user.getName());
-			model.addAttribute("userEmail", username);
-			model.addAttribute("userRole", user.getRole());
-
-		} else {
-			model.addAttribute("userName", null);
-
+		Optional<Post> post = postService.fetchPostById(id);
+		if (!post.isPresent()) {
+			return "redirect:/post";
 		}
 
-		model.addAttribute("post", postService.fetchPostById(id).orElse(null));
+		User user = postService.getAuthenticatedUser();
+		if (user != null) {
+			model.addAttribute("userName", user.getName());
+			model.addAttribute("userEmail", user.getEmail());
+			model.addAttribute("userRole", user.getRole());
+		} else {
+			model.addAttribute("userName", null);
+		}
+
+		model.addAttribute("post", post.get());
 		return "post";
 	}
 
 	@GetMapping("/create")
 	public String createPage(Model model) {
-		Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-		UserDetails userDetails = (UserDetails) authentication.getPrincipal();
-		String username = userDetails.getUsername();
-
-		User user = userService.fetchByEmail(username);
-		String displayName = user != null ? user.getName() : username;
+		User user = postService.getAuthenticatedUser();
+		if (user == null) {
+			return "redirect:/login";
+		}
 
 		model.addAttribute("post", new Post());
-		model.addAttribute("authorName", displayName);
+		model.addAttribute("authorName", user.getName());
 		model.addAttribute("userRole", user.getRole());
 
 		return "create";
 	}
 
 	@PostMapping("/creatingprocess")
-	public String addingBlog(@ModelAttribute Post post, @RequestParam("tagsString") String tags,
-	        @RequestParam("authorName") String authorName, Model model) {
+	public String addBlog(@ModelAttribute Post post, @RequestParam("tagsString") String tags,
+			@RequestParam("authorName") String authorName) {
 
-	    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-	    UserDetails userDetails = (UserDetails) authentication.getPrincipal();
-	    String username = userDetails.getUsername();
+		User loggedInUser = postService.getAuthenticatedUser();
+		if (loggedInUser == null) {
+			return "redirect:/login";
+		}
 
-	    User loggedInUser = userService.fetchByEmail(username);
-	    User author;
+		User author;
 
-	    if (loggedInUser.getRole().equals("ROLE_ADMIN")) {
-
-	        author = userService.fetchByName(authorName.split(",")[1]);
-
-	        if (author == null) {
-	        	System.out.println("lets find name of uuthor" + author + "  " + authorName);
-	            return "redirect:/post/create";
-	        } else {
-	            System.out.println("Author found: " + author.getName());
-	        }
-	    } else {
-	        author = loggedInUser;
-	    }
-
-	    postService.savePost(author, post, tags);
-
-	    return "redirect:/post";
+		System.out.println("the author name is "+authorName);
+		if (postService.isAdmin(loggedInUser)) {
+			author = userService.fetchByName(authorName);
+			if (author == null) {
+				return "redirect:/post/create";
+			}
+		} else {
+			author = loggedInUser;
+		}
+		postService.savePost(author, post, tags);
+		return "redirect:/post";
 	}
-
 
 	@GetMapping("/{id}/edit")
 	public String editPage(@PathVariable int id, Model model) {
-		Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-		if (authentication != null && authentication.getPrincipal() instanceof UserDetails) {
-			UserDetails userDetails = (UserDetails) authentication.getPrincipal();
-			String username = userDetails.getUsername();
-			User user = userService.fetchByEmail(username);
+		User user = postService.getAuthenticatedUser();
+		Post post = postService.fetchPostById(id).orElse(null);
 
-			Post post = postService.fetchPostById(id).orElse(null);
-
-			if (post != null
-					&& (post.getAuthor().getName().equals(user.getName()) || user.getRole().equals("ROLE_ADMIN"))) {
-				model.addAttribute("post", post);
-
-				String stringOfTags = postService.stringOfTags(post);
-				if (!stringOfTags.isEmpty()) {
-					model.addAttribute("tag", stringOfTags.substring(0, stringOfTags.length() - 1));
-				} else {
-					model.addAttribute("tag", "");
-				}
-
-				model.addAttribute("isAuthorFieldDisabled", !user.getRole().equals("ROLE_ADMIN"));
-
-				return "update";
-			}
+		if (post == null || (!post.getAuthor().getName().equals(user.getName()) && !postService.isAdmin(user))) {
+			return "redirect:/post";
 		}
-		return "redirect:/post";
+
+		model.addAttribute("post", post);
+		model.addAttribute("tag", postService.stringOfTags(post));
+		model.addAttribute("isAuthorFieldDisabled", !postService.isAdmin(user));
+
+		return "update";
 	}
 
 	@PutMapping("/{id}/update")
 	public String updatePost(@RequestParam("authorName") String authorName, @PathVariable int id,
 			@ModelAttribute Post post, @RequestParam("updateTags") String updateTags) {
-		Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-		if (authentication != null && authentication.getPrincipal() instanceof UserDetails) {
-			UserDetails userDetails = (UserDetails) authentication.getPrincipal();
-			String username = userDetails.getUsername();
-			User user = userService.fetchByEmail(username);
 
-			Post existingPost = postService.fetchPostById(id).orElse(null);
-			if (existingPost != null) {
-				String postAuthorEmail = existingPost.getAuthor().getEmail();
+		User user = postService.getAuthenticatedUser();
+		Post existingPost = postService.fetchPostById(id).orElse(null);
 
-				System.out.println("Logged-in user email: " + username);
-				System.out.println("Post author email: " + postAuthorEmail);
-				System.out.println(user.getRole());
-
-				if (postAuthorEmail.equals(username) || user.getRole().equalsIgnoreCase("ROLE_ADMIN")) {
-					postService.updatePost(id, authorName, post, updateTags);
-				} else {
-					System.out.println("Unauthorized attempt by: " + username);
-				}
-			}
+		if (existingPost != null
+				&& (existingPost.getAuthor().getEmail().equals(user.getEmail()) || postService.isAdmin(user))) {
+			postService.updatePost(id, authorName, post, updateTags);
 		}
 		return "redirect:/post";
 	}
 
 	@GetMapping("/{id}/delete")
 	public String deletePost(@PathVariable int id) {
-		Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-		if (authentication != null && authentication.getPrincipal() instanceof UserDetails) {
-			UserDetails userDetails = (UserDetails) authentication.getPrincipal();
-			String username = userDetails.getUsername();
-			User user = userService.fetchByEmail(username);
+		User user = postService.getAuthenticatedUser();
+		Post post = postService.fetchPostById(id).orElse(null);
 
-			Post post = postService.fetchPostById(id).orElse(null);
-
-			if (post != null) {
-				String postAuthorEmail = post.getAuthor().getEmail();
-				System.out.println("Logged-in user email: " + username);
-				System.out.println("Post author email: " + postAuthorEmail);
-				System.out.println("User role: " + user.getRole());
-
-				if (postAuthorEmail.equals(username) || user.getRole().equalsIgnoreCase("ROLE_ADMIN")) {
-					postService.deletePostById(id);
-				} else {
-					System.out.println("Unauthorized attempt to delete post by: " + username);
-				}
-			}
+		if (post != null && (post.getAuthor().getEmail().equals(user.getEmail()) || postService.isAdmin(user))) {
+			postService.deletePostById(id);
 		}
 		return "redirect:/post";
 	}
 
 	@GetMapping("/search")
-	public String searchPosts(@RequestParam(required = false, defaultValue = "asc") String sortOrder,
-			@RequestParam String query, Model model, @RequestParam(defaultValue = "0") int page,
-			@RequestParam(defaultValue = "6") int size) {
-		List<Post> searchResults = postService.searchPosts(query);
-		model.addAttribute("allPost", searchResults);
-		model.addAttribute("allPostForDate", postService.fetchAllPostsForDistinctDates());
+	public String searchPosts(@RequestParam String query, @RequestParam(defaultValue = "asc") String sortOrder,
+			Model model, @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "6") int size) {
 
-		Page<Post> paginatedPosts = postService.getPaginatedPosts(page, size);
+		Pageable pageable = PageRequest.of(page, size,
+				sortOrder.equalsIgnoreCase("asc") ? Sort.by("publishedAt").ascending()
+						: Sort.by("publishedAt").descending());
 
-		model.addAttribute("pagePosts", paginatedPosts.getContent());
-		model.addAttribute("currentPage", page);
-		model.addAttribute("totalPages", (int) Math.ceil(searchResults.size() / 6));
+		Page<Post> searchResults = postService.searchPosts(query, pageable);
+		model.addAttribute("allPost", searchResults.getContent());
+		model.addAttribute("totalPages", searchResults.getTotalPages());
 
-		model.addAttribute("allTags", postService.fatchAllTagPosts());
-		model.addAttribute("allAuthors", postService.fetchAllPostsForDistinctAuthor());
+		postService.addCommonAttributes(model, pageable);
 		model.addAttribute("sortOrder", sortOrder);
 
 		return "index";
 	}
 
 	@GetMapping("/filterBy")
-	public String filter(@RequestParam(required = false, defaultValue = "asc") String sortOrder,
-			@RequestParam(required = false) List<String> tagId, @RequestParam(required = false) String selectedDate,
-			Model model, @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "6") int size,
-			@RequestParam(required = false) List<String> author) {
+	public String filter(@RequestParam(required = false) List<String> tagId,
+			@RequestParam(required = false) String selectedDate, @RequestParam(required = false) List<String> author,
+			@RequestParam(defaultValue = "asc") String sortOrder, Model model,
+			@RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "6") int size) {
 
-		List<Post> filter = postService.filter(tagId, selectedDate, author, page, size);
-		Page<Post> paginatedPosts = postService.getPaginatedPosts(page, size);
+		Pageable pageable = PageRequest.of(page, size);
+		Page<Post> filterResults = postService.filter(tagId, selectedDate, author, sortOrder, pageable);
 
-		model.addAttribute("pagePosts", paginatedPosts.getContent());
-		model.addAttribute("currentPage", page);
-		model.addAttribute("totalPages", (int) Math.ceil((double) filter.size() / size));
-
-		model.addAttribute("allPostForDate", postService.fetchAllPostsForDistinctDates());
-		model.addAttribute("allTags", postService.fatchAllTagPosts());
-		model.addAttribute("allAuthors", postService.fetchAllPostsForDistinctAuthor());
-
+		model.addAttribute("filteredPosts", filterResults.getContent());
+		model.addAttribute("totalPages", filterResults.getTotalPages());
 		model.addAttribute("selectedAuthors", author);
 		model.addAttribute("selectedTags", tagId);
 		model.addAttribute("sortOrder", sortOrder);
 
-		model.addAttribute("filteredPosts", filter);
+		postService.addCommonAttributes(model, pageable);
 
-		if ((tagId == null || tagId.isEmpty()) && (selectedDate == null || selectedDate.trim().isEmpty())
-				&& (author == null || author.isEmpty())) {
-			return "redirect:/post";
-		}
-		return "index";
+		return (tagId == null || tagId.isEmpty()) && (selectedDate == null || selectedDate.isEmpty())
+				&& (author == null || author.isEmpty()) ? "redirect:/post" : "index";
 	}
 
 	@GetMapping("/sortByDate")
-	public String sortByDate(@RequestParam(required = false, defaultValue = "asc") String sortOrder, Model model,
+	public String sortByDate(@RequestParam(defaultValue = "asc") String sortOrder, Model model,
 			@RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "6") int size) {
 
-		PageRequest pageRequest = PageRequest.of(page, size,
-				Sort.by(Sort.Direction.fromString(sortOrder), "publishedAt"));
+		Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.fromString(sortOrder), "publishedAt"));
+		Page<Post> paginatedPosts = postService.getPaginatedPosts(pageable);
 
-		Page<Post> paginatedPosts = postService.getPaginatedPosts(pageRequest);
-
-		model.addAttribute("currentPage", page);
-		model.addAttribute("totalPages", paginatedPosts.getTotalPages());
 		model.addAttribute("allPost", paginatedPosts.getContent());
+		model.addAttribute("totalPages", paginatedPosts.getTotalPages());
 
-		model.addAttribute("allTags", postService.fatchAllTagPosts());
-		model.addAttribute("allPostForDate", postService.fetchAllPostsForDistinctDates());
-		model.addAttribute("allAuthors", postService.fetchAllPostsForDistinctAuthor());
+		postService.addCommonAttributes(model, pageable);
 		model.addAttribute("sortOrder", sortOrder);
 
 		return "index";
 	}
+
 }

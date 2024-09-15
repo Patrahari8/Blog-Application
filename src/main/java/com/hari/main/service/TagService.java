@@ -7,7 +7,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.hari.main.dao.TagRepository;
-import com.hari.main.model.Post;
 import com.hari.main.model.Tag;
 
 @Service

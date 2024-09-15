@@ -17,11 +17,11 @@ public class UserController {
 
 	@Autowired
 	UserService userService;
-
-	@GetMapping("/")
-	public String redirectToPosts() {
-		return "redirect:/post"; 
-	}
+	
+	 @GetMapping("/")
+	    public String redirectToPosts() {
+	        return "redirect:/post"; 
+	    }
 
 	@GetMapping("/signup")
 	public String signUp(Model model) {
@@ -31,10 +31,7 @@ public class UserController {
 
 	@PostMapping("/register")
 	public String registerUser(@ModelAttribute User user) {
-		user.setRole("ROLE_AUTHOR");
-		user.setEnabled(true);
 		userService.saveTheUser(user);
-
 		return "redirect:/login";
 	}
 

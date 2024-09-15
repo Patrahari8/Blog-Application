@@ -31,7 +31,7 @@ public class SecurityConfig {
         http
                 .authorizeHttpRequests(configurer ->
                         configurer
-                                .requestMatchers("/signup", "/register", "/adminSignup", "/adminRegister", "/login", "/resources/**", "/css/**").permitAll()
+                                .requestMatchers("/signup", "/register", "/login", "/resources/**", "/css/**").permitAll()
                                 .requestMatchers("/post", "/post/**", "/", "/comment/**","/post/search", "/post/filterBy", "/post/sortByDate").permitAll()
                                 .requestMatchers("/post/create", "/post/*/edit", "/post/*/delete", "/post/*/update",
                                         "/comment/*/edit/*", "/comment/{id}", "/comment/*/delete/*").hasAnyRole("AUTHOR", "ADMIN")
